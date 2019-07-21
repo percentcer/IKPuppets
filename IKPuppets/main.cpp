@@ -11,11 +11,10 @@ void drawBone(const Joint& joint, sf::RenderTarget& target) {
     sf::ConvexShape shape;
     shape.setFillColor(sf::Color::Cyan);
     shape.setPointCount(4);
-    shape.setPoint(0, sf::Vector2f(-1, 0));
-    shape.setPoint(1, sf::Vector2f(0, 1));
-    shape.setPoint(2, sf::Vector2f(joint.length - 1.0f, 0));
-    shape.setPoint(3, sf::Vector2f(0, -1));
-    shape.scale({ 20.f, 20.f });
+    shape.setPoint(0, sf::Vector2f(-10, 0));
+    shape.setPoint(1, sf::Vector2f(0, 10));
+    shape.setPoint(2, sf::Vector2f(joint.length - 10.0f, 0));
+    shape.setPoint(3, sf::Vector2f(0, -10));
 
     sf::Transform myTransform = joint.transform;
     const Joint* current = &joint;
