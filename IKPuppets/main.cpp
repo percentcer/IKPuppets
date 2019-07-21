@@ -4,8 +4,15 @@
 struct Joint {
     Joint* parent;
     float length;
-    sf::Transform transform;
+    float rotation;
 };
+
+sf::Transform jointTransform(const Joint& joint) {
+    float parentLength = joint.parent ? joint.parent->length : 0.0f;
+    return sf::Transform()
+        .translate({ parentLength, 0.0f })
+        .rotate(joint.rotation);
+}
 
 void drawBone(const Joint& joint, sf::RenderTarget& target) {
     sf::ConvexShape shape;
@@ -16,10 +23,10 @@ void drawBone(const Joint& joint, sf::RenderTarget& target) {
     shape.setPoint(2, sf::Vector2f(joint.length - 10.0f, 0));
     shape.setPoint(3, sf::Vector2f(0, -10));
 
-    sf::Transform myTransform = joint.transform;
+    sf::Transform myTransform = jointTransform(joint);
     const Joint* current = &joint;
     while (current = current->parent) {
-        myTransform = current->transform * myTransform;
+        myTransform = jointTransform(*current) * myTransform;
     }
 
     target.draw(shape, myTransform);
@@ -31,6 +38,8 @@ int main() {
     settings.antialiasingLevel = 8;
 
     sf::RenderWindow window(sf::VideoMode(1280, 720), "IK Puppets", sf::Style::Default, settings);
+
+    sf::Clock clock;
 
     while (window.isOpen())
     {
@@ -51,14 +60,11 @@ int main() {
         {
             window.clear(sf::Color(32, 32, 32, 255));
 
-            sf::Transform jointTransform = sf::Transform();
-            jointTransform
-                .translate({ 100, 100 })
-                .rotate(10.f);
-            
-            Joint root = { nullptr, 7.0f, jointTransform };
-            Joint child = { &root, 7.0f, jointTransform };
-            Joint end = { &child, 7.0f, jointTransform };
+            const float dt = clock.getElapsedTime().asSeconds();
+            Joint root = { nullptr, 200.0f, dt };
+            Joint upper = { &root, 80.0f, 20.f * cos(dt / 2.f)};
+            Joint lower = { &upper, 60.0f, 40.f * cos(dt) };
+            Joint end = { &lower, 50.0f, 50.0f * sin(dt) };
             
             drawBone(root, window);
             drawBone(upper, window);
