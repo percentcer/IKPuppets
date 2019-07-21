@@ -8,19 +8,23 @@ struct Joint {
 };
 
 sf::Transform localTransform(const Joint& joint) {
-    float parentLength = joint.parent ? joint.parent->length : 0.0f;
-    return sf::Transform()
-        .translate({ parentLength, 0.0f })
-        .rotate(joint.rotation);
+    return sf::Transform().rotate(joint.rotation);
+}
+
+sf::Transform ancestryTransform(const Joint& joint) {
+    sf::Transform ancestryTransform;
+    const Joint* current = &joint;
+    while ((current = current->parent) != nullptr) {
+        sf::Transform parentTransform;
+        parentTransform.rotate(current->rotation);
+        parentTransform.translate(current->length, 0);
+        ancestryTransform = parentTransform * ancestryTransform;
+    }
+    return ancestryTransform;
 }
 
 sf::Transform worldTransform(const Joint& joint) {
-    sf::Transform myTransform = localTransform(joint);
-    const Joint* current = &joint;
-    while (current = current->parent) {
-        myTransform = localTransform(*current) * myTransform;
-    }
-    return myTransform;
+    return ancestryTransform(joint) * localTransform(joint);
 }
 
 void drawBone(const Joint& joint, sf::RenderTarget& target) {
