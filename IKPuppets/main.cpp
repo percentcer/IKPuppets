@@ -7,11 +7,20 @@ struct Joint {
     float rotation;
 };
 
-sf::Transform jointTransform(const Joint& joint) {
+sf::Transform localTransform(const Joint& joint) {
     float parentLength = joint.parent ? joint.parent->length : 0.0f;
     return sf::Transform()
         .translate({ parentLength, 0.0f })
         .rotate(joint.rotation);
+}
+
+sf::Transform worldTransform(const Joint& joint) {
+    sf::Transform myTransform = localTransform(joint);
+    const Joint* current = &joint;
+    while (current = current->parent) {
+        myTransform = localTransform(*current) * myTransform;
+    }
+    return myTransform;
 }
 
 void drawBone(const Joint& joint, sf::RenderTarget& target) {
@@ -22,14 +31,10 @@ void drawBone(const Joint& joint, sf::RenderTarget& target) {
     shape.setPoint(1, sf::Vector2f(0, 10));
     shape.setPoint(2, sf::Vector2f(joint.length - 10.0f, 0));
     shape.setPoint(3, sf::Vector2f(0, -10));
-
-    sf::Transform myTransform = jointTransform(joint);
-    const Joint* current = &joint;
-    while (current = current->parent) {
-        myTransform = jointTransform(*current) * myTransform;
-    }
-
-    target.draw(shape, myTransform);
+    
+    // --- hacky way to center the joint chain, remove ----------------------
+    static const sf::Transform offset = sf::Transform(1,0,640,0,1,360,0,0,1);
+    target.draw(shape, offset * worldTransform(joint));
 }
 
 int main() {
@@ -61,7 +66,7 @@ int main() {
             window.clear(sf::Color(32, 32, 32, 255));
 
             const float dt = clock.getElapsedTime().asSeconds();
-            Joint root = { nullptr, 200.0f, dt };
+            Joint root = { nullptr, 100.0f, dt };
             Joint upper = { &root, 80.0f, 20.f * cos(dt / 2.f)};
             Joint lower = { &upper, 60.0f, 40.f * cos(dt) };
             Joint end = { &lower, 50.0f, 50.0f * sin(dt) };
