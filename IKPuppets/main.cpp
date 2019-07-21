@@ -28,9 +28,10 @@ void drawBone(const Joint& joint, sf::RenderTarget& target) {
 
 int main() {
     // Init
-    sf::RenderWindow window(sf::VideoMode(1280, 720), "IK Puppets");
-    sf::RenderTexture frame;
-    frame.create(window.getSize().x, window.getSize().y);
+    sf::ContextSettings settings;
+    settings.antialiasingLevel = 8;
+
+    sf::RenderWindow window(sf::VideoMode(1280, 720), "IK Puppets", sf::Style::Default, settings);
 
     while (window.isOpen())
     {
@@ -49,8 +50,7 @@ int main() {
 
         // render stuff
         {
-            window.clear();
-            frame.clear(sf::Color(32,32,32,255));
+            window.clear(sf::Color(32, 32, 32, 255));
 
             sf::Transform jointTransform = sf::Transform();
             jointTransform
@@ -61,15 +61,11 @@ int main() {
             Joint child = { &root, 7.0f, jointTransform };
             Joint end = { &child, 7.0f, jointTransform };
             
-            drawBone(root, frame);
-            drawBone(child, frame);
-            drawBone(end, frame);
+            drawBone(root, window);
+            drawBone(upper, window);
+            drawBone(lower, window);
+            drawBone(end, window);
 
-            frame.display();
-            sf::Sprite sframe{ frame.getTexture() };
-
-            window.draw(sframe);
-            
             window.display();
         }
     }
