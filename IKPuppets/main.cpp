@@ -61,6 +61,9 @@ int main() {
             case sf::Event::Closed:
                 window.close();
                 break;
+            case sf::Event::KeyPressed:
+                switch (event.key.code) {}
+                break;
             case sf::Event::MouseMoved:
                 target = sf::Vector2f{ (float)event.mouseMove.x, (float)event.mouseMove.y };
                 break;
