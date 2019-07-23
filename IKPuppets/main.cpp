@@ -49,6 +49,7 @@ int main() {
     sf::RenderWindow window(sf::VideoMode(1280, 720), "IK Puppets", sf::Style::Default, settings);
 
     sf::Clock clock;
+    sf::Vector2f target;
 
     while (window.isOpen())
     {
@@ -59,6 +60,9 @@ int main() {
             {
             case sf::Event::Closed:
                 window.close();
+                break;
+            case sf::Event::MouseMoved:
+                target = sf::Vector2f{ (float)event.mouseMove.x, (float)event.mouseMove.y };
                 break;
             default:
                 break;
