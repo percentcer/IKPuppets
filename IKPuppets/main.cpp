@@ -12,15 +12,15 @@ sf::Transform localTransform(const Joint& joint) {
 }
 
 sf::Transform ancestryTransform(const Joint& joint) {
-    sf::Transform ancestryTransform;
+    sf::Transform accumulation;
     const Joint* current = &joint;
     while ((current = current->parent) != nullptr) {
         sf::Transform parentTransform;
         parentTransform.rotate(current->rotation);
         parentTransform.translate(current->length, 0);
-        ancestryTransform = parentTransform * ancestryTransform;
+        accumulation = parentTransform * accumulation;
     }
-    return ancestryTransform;
+    return accumulation;
 }
 
 sf::Transform worldTransform(const Joint& joint) {
