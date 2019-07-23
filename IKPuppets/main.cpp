@@ -1,44 +1,57 @@
 #include <iostream>
 #include <SFML/Graphics.hpp>
 
-struct Joint {
-    Joint* parent;
-    float length;
-    float rotation;
+template<int N>
+struct Bones {
+    int parent[N];
+    
+    float length[N];
+    float rotation[N];
+    float initialRotation[N];
+
+    size_t size = N;
 };
 
-sf::Transform localTransform(const Joint& joint) {
-    return sf::Transform().rotate(joint.rotation);
+template <int N>
+sf::Transform localTransform(const Bones<N>& bones, int i) {
+    return sf::Transform().rotate(bones.rotation[i]);
 }
 
-sf::Transform ancestryTransform(const Joint& joint) {
+template <int N>
+sf::Transform ancestryTransform(const Bones<N>& bones, int i) {
     sf::Transform accumulation;
-    const Joint* current = &joint;
-    while ((current = current->parent) != nullptr) {
+    
+    int current = i;
+    while ((current = bones.parent[current]) != -1) {
         sf::Transform parentTransform;
-        parentTransform.rotate(current->rotation);
-        parentTransform.translate(current->length, 0);
+        parentTransform.rotate(bones.rotation[current]);
+        parentTransform.translate(bones.length[current], 0);
         accumulation = parentTransform * accumulation;
     }
+
     return accumulation;
 }
 
-sf::Transform worldTransform(const Joint& joint) {
-    return ancestryTransform(joint) * localTransform(joint);
+template <int N>
+sf::Transform worldTransform(const Bones<N>& bones, int i) {
+    return ancestryTransform(bones, i) * localTransform(bones, i);
 }
 
-void drawBone(const Joint& joint, sf::RenderTarget& target) {
-    sf::ConvexShape shape;
-    shape.setFillColor(sf::Color::Cyan);
-    shape.setPointCount(4);
-    shape.setPoint(0, sf::Vector2f(0, 0));
-    shape.setPoint(1, sf::Vector2f(10, 10));
-    shape.setPoint(2, sf::Vector2f(joint.length, 0));
-    shape.setPoint(3, sf::Vector2f(10, -10));
-    
-    // --- hacky way to center the joint chain, remove ----------------------
-    static const sf::Transform offset = sf::Transform(1,0,640,0,1,360,0,0,1);
-    target.draw(shape, offset * worldTransform(joint));
+template<int N>
+void drawBones(const Bones<N>& bones, sf::RenderTarget& target) {
+    for (int i = 0; i < bones.size; i++) {
+        sf::ConvexShape shape;
+        shape.setFillColor(sf::Color::Cyan);
+        shape.setPointCount(4);
+        shape.setPoint(0, sf::Vector2f(0, 0));
+        shape.setPoint(1, sf::Vector2f(10, 10));
+        shape.setPoint(2, sf::Vector2f(bones.length[i], 0));
+        shape.setPoint(3, sf::Vector2f(10, -10));
+
+        // --- hacky way to center the joint chain, remove ----------------------
+        static const sf::Transform offset = sf::Transform(1, 0, 640, 0, 1, 360, 0, 0, 1);
+        target.draw(shape, offset * worldTransform(bones, i));
+    }
 }
 
 int main() {
@@ -77,15 +90,15 @@ int main() {
             window.clear(sf::Color(32, 32, 32, 255));
 
             const float dt = clock.getElapsedTime().asSeconds();
-            Joint root = { nullptr, 100.0f, dt };
-            Joint upper = { &root, 80.0f, 20.f * cos(dt / 2.f)};
-            Joint lower = { &upper, 60.0f, 40.f * cos(dt) };
-            Joint end = { &lower, 50.0f, 50.0f * sin(dt) };
-            
-            drawBone(root, window);
-            drawBone(upper, window);
-            drawBone(lower, window);
-            drawBone(end, window);
+            Bones<8> bones;
+            for (int i = 0; i < bones.size; i++) {
+                bones.parent[i] = i - 1;
+                bones.length[i] = 100.f - 10 * i;
+                bones.initialRotation[i] = bones.rotation[i] = 10.f * i * cos(dt * (1.0f + i));
+            }
+            bones.rotation[0] = dt * 4.f;
+
+            drawBones(bones, window);
 
             window.display();
         }
