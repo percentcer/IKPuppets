@@ -39,7 +39,7 @@ sf::Transform worldTransform(const Bones<N>& bones, int i) {
 
 template<int N>
 void drawBones(const Bones<N>& bones, sf::RenderTarget& target) {
-    for (int i = 0; i < bones.size; i++) {
+    for (size_t i = 0; i < bones.size; i++) {
         sf::ConvexShape shape;
         shape.setFillColor(sf::Color::Cyan);
         shape.setPointCount(4);
@@ -64,6 +64,8 @@ int main() {
     sf::Clock clock;
     sf::Vector2f target;
 
+    bool wiggleMode = true;
+
     while (window.isOpen())
     {
         sf::Event event;
@@ -75,7 +77,11 @@ int main() {
                 window.close();
                 break;
             case sf::Event::KeyPressed:
-                switch (event.key.code) {}
+                switch (event.key.code) {
+                case sf::Keyboard::Space:
+                    wiggleMode = !wiggleMode;
+                    break;
+                }
                 break;
             case sf::Event::MouseMoved:
                 target = sf::Vector2f{ (float)event.mouseMove.x, (float)event.mouseMove.y };
@@ -91,12 +97,23 @@ int main() {
 
             const float dt = clock.getElapsedTime().asSeconds();
             Bones<8> bones;
-            for (int i = 0; i < bones.size; i++) {
+            for (size_t i = 0; i < bones.size; i++) {
                 bones.parent[i] = i - 1;
                 bones.length[i] = 100.f - 10 * i;
-                bones.initialRotation[i] = bones.rotation[i] = 10.f * i * cos(dt * (1.0f + i));
+                bones.initialRotation[i] = 0.0f;
             }
-            bones.rotation[0] = dt * 4.f;
+
+            if (wiggleMode) {
+                for (size_t i = 0; i < bones.size; i++) {
+                    bones.rotation[i] = 10.f * i * cos(dt * (1.0f + i));
+                }
+                bones.rotation[0] = dt * 4.f;
+            }
+            else {
+                for (size_t i = 0; i < bones.size; i++) {
+                    bones.rotation[i] = 0.0f;
+                }
+            }            
 
             drawBones(bones, window);
 
