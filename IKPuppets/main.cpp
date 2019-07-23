@@ -34,7 +34,9 @@ sf::Transform ancestryTransform(const Bones<N>& bones, int i) {
 
 template <int N>
 sf::Transform worldTransform(const Bones<N>& bones, int i) {
-    return ancestryTransform(bones, i) * localTransform(bones, i);
+    // --- hacky way to center the joint chain, remove ----------------------
+    static const sf::Transform offset = sf::Transform(1, 0, 640, 0, 1, 360, 0, 0, 1);
+    return offset * ancestryTransform(bones, i) * localTransform(bones, i);
 }
 
 template<int N>
@@ -47,11 +49,14 @@ void drawBones(const Bones<N>& bones, sf::RenderTarget& target) {
         shape.setPoint(1, sf::Vector2f(10, 10));
         shape.setPoint(2, sf::Vector2f(bones.length[i], 0));
         shape.setPoint(3, sf::Vector2f(10, -10));
-
-        // --- hacky way to center the joint chain, remove ----------------------
-        static const sf::Transform offset = sf::Transform(1, 0, 640, 0, 1, 360, 0, 0, 1);
-        target.draw(shape, offset * worldTransform(bones, i));
+        target.draw(shape, worldTransform(bones, i));
     }
+}
+
+template <int N>
+sf::Vector2f endPosition(Bones<N>& bones) {
+    sf::Transform world = worldTransform(bones, N - 1);
+    return world.transformPoint(bones.length[N-1], 0);
 }
 
 int main() {
@@ -110,9 +115,11 @@ int main() {
                 bones.rotation[0] = dt * 4.f;
             }
             else {
-                for (size_t i = 0; i < bones.size; i++) {
-                    bones.rotation[i] = 0.0f;
-                }
+                float rad = 10.f;
+                sf::CircleShape dot(rad);
+                dot.setFillColor(sf::Color::Yellow);
+                dot.move(endPosition(bones) - sf::Vector2f{ rad, rad });
+                window.draw(dot);
             }            
 
             drawBones(bones, window);
