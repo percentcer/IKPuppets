@@ -31,10 +31,10 @@ void drawBone(const Joint& joint, sf::RenderTarget& target) {
     sf::ConvexShape shape;
     shape.setFillColor(sf::Color::Cyan);
     shape.setPointCount(4);
-    shape.setPoint(0, sf::Vector2f(-10, 0));
-    shape.setPoint(1, sf::Vector2f(0, 10));
-    shape.setPoint(2, sf::Vector2f(joint.length - 10.0f, 0));
-    shape.setPoint(3, sf::Vector2f(0, -10));
+    shape.setPoint(0, sf::Vector2f(0, 0));
+    shape.setPoint(1, sf::Vector2f(10, 10));
+    shape.setPoint(2, sf::Vector2f(joint.length, 0));
+    shape.setPoint(3, sf::Vector2f(10, -10));
     
     // --- hacky way to center the joint chain, remove ----------------------
     static const sf::Transform offset = sf::Transform(1,0,640,0,1,360,0,0,1);
