@@ -35,7 +35,7 @@ sf::Transform ancestryTransform(const Bones<N>& bones, int i) {
 template <int N>
 sf::Transform worldTransform(const Bones<N>& bones, int i) {
     // --- hacky way to center the joint chain, remove ----------------------
-    static const sf::Transform offset = sf::Transform(1, 0, 640, 0, 1, 360, 0, 0, 1);
+    static const sf::Transform offset = sf::Transform(1, 0, 640, 0, 1, 640, 0, 0, 1);
     return offset * ancestryTransform(bones, i) * localTransform(bones, i);
 }
 
@@ -64,7 +64,7 @@ int main() {
     sf::ContextSettings settings;
     settings.antialiasingLevel = 8;
 
-    sf::RenderWindow window(sf::VideoMode(1280, 720), "IK Puppets", sf::Style::Default, settings);
+    sf::RenderWindow window(sf::VideoMode(1280, 1280), "IK Puppets", sf::Style::Default, settings);
 
     sf::Clock clock;
     sf::Vector2f target;
