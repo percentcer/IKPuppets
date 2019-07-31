@@ -40,23 +40,22 @@ sf::Transform worldTransform(const Bones<N>& bones, int i) {
 }
 
 template<int N>
-void drawBones(const Bones<N>& bones, sf::RenderTarget& target) {
-    for (size_t i = 0; i < bones.size; i++) {
-        sf::ConvexShape shape;
-        shape.setFillColor(sf::Color::Cyan);
-        shape.setPointCount(4);
-        shape.setPoint(0, sf::Vector2f(0, 0));
-        shape.setPoint(1, sf::Vector2f(10, 10));
-        shape.setPoint(2, sf::Vector2f(bones.length[i], 0));
-        shape.setPoint(3, sf::Vector2f(10, -10));
-        target.draw(shape, worldTransform(bones, i));
+void drawBones(const Bones<N>& bones, const std::vector<sf::ConvexShape>& boneShapes, sf::RenderTarget& target) {
+    for (size_t i = 0; i < bones.size; i++) {        
+        target.draw(boneShapes[i], worldTransform(bones, (int)i));
     }
 }
 
 template <int N>
+sf::Vector2f jointPosition(Bones<N>& bones, int i) {
+    sf::Transform world = worldTransform(bones, i);
+    return world.transformPoint(bones.length[i], 0);
+}
+
+template <int N>
 sf::Vector2f endPosition(Bones<N>& bones) {
-    sf::Transform world = worldTransform(bones, N - 1);
-    return world.transformPoint(bones.length[N-1], 0);
+    return jointPosition(bones, N - 1);
+}
 }
 
 int main() {
@@ -70,6 +69,32 @@ int main() {
     sf::Vector2f target;
 
     bool wiggleMode = true;
+
+    // init bones
+    Bones<4> bones;
+    for (size_t i = 0; i < bones.size; i++) {
+        bones.parent[i] = (int)i - 1;
+        bones.length[i] = 100.f - 10 * i;
+        bones.initialRotation[i] = 0.0f;
+    }
+
+    // init boneshapes
+    std::vector<sf::ConvexShape> boneShapes;
+    for (size_t i = 0; i < bones.size; i++) {
+        sf::ConvexShape shape;
+        shape.setFillColor(sf::Color::Cyan);
+        shape.setPointCount(4);
+        shape.setPoint(0, sf::Vector2f(0, 0));
+        shape.setPoint(1, sf::Vector2f(10, 10));
+        shape.setPoint(2, sf::Vector2f(bones.length[i], 0));
+        shape.setPoint(3, sf::Vector2f(10, -10));
+        boneShapes.emplace_back(shape);
+    }
+
+    // mouse target dot
+    const float rad = 10.f;
+    sf::CircleShape dot(rad);
+    dot.setFillColor(sf::Color::Yellow);
 
     while (window.isOpen())
     {
@@ -101,12 +126,6 @@ int main() {
             window.clear(sf::Color(32, 32, 32, 255));
 
             const float dt = clock.getElapsedTime().asSeconds();
-            Bones<8> bones;
-            for (size_t i = 0; i < bones.size; i++) {
-                bones.parent[i] = i - 1;
-                bones.length[i] = 100.f - 10 * i;
-                bones.initialRotation[i] = 0.0f;
-            }
 
             if (wiggleMode) {
                 for (size_t i = 0; i < bones.size; i++) {
@@ -115,14 +134,11 @@ int main() {
                 bones.rotation[0] = dt * 4.f;
             }
             else {
-                float rad = 10.f;
-                sf::CircleShape dot(rad);
-                dot.setFillColor(sf::Color::Yellow);
-                dot.move(endPosition(bones) - sf::Vector2f{ rad, rad });
+                dot.setPosition(target - sf::Vector2f{ rad, rad });
                 window.draw(dot);
             }            
 
-            drawBones(bones, window);
+            drawBones(bones, boneShapes, window);
 
             window.display();
         }
