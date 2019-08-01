@@ -73,11 +73,7 @@ void jacobianIK(Bones<N>& bones, sf::Vector2f target) {
             const sf::Vector2f sfJointPos = jointPosition(bones, i);
             const Eigen::Vector2f jointPos(sfJointPos.x, sfJointPos.y);
             const Eigen::Vector2f jointToEnd = endPos - jointPos;
-            const Eigen::Vector3f jointToEnd3f = Eigen::Vector3f(jointToEnd.x(), jointToEnd.y(), 0.0f);
-            static const Eigen::Vector3f axisZ(0.0f, 0.0f, 1.0f);
-            const Eigen::Vector3f dTheta = axisZ.cross(jointToEnd3f);
-            const Eigen::Vector2f dTheta2f = Eigen::Vector2f(dTheta.x(), dTheta.y());
-            jacobian.col(i) = dTheta2f;
+            jacobian.col(i) = Eigen::Vector2f(-jointToEnd.y(), jointToEnd.x());
         }
         
         const Eigen::Matrix<float, N, 1> d0 = jacobian.transpose() * (mousePos - endPos);
