@@ -14,64 +14,68 @@ struct Bones {
 };
 
 template <int N>
-sf::Transform localTransform(const Bones<N>& bones, int i) {
-    return sf::Transform().rotate(bones.rotation[i]);
+Eigen::Rotation2D<float> localTransform(const Bones<N>& bones, int i) {
+    return Eigen::Rotation2D<float>(bones.rotation[i]);
 }
 
 template <int N>
-sf::Transform ancestryTransform(const Bones<N>& bones, int i) {
-    sf::Transform accumulation;
+Eigen::Transform<float, 2, Eigen::Affine> ancestryTransform(const Bones<N>& bones, int i) {
+    Eigen::Transform<float, 2, Eigen::Affine> accumulation = Eigen::Transform<float, 2, Eigen::Affine>::Identity();
     
     int current = i;
     while ((current = bones.parent[current]) != -1) {
-        sf::Transform parentTransform;
-        parentTransform.rotate(bones.rotation[current]);
-        parentTransform.translate(bones.length[current], 0);
+        Eigen::Transform<float, 2, Eigen::Affine> parentTransform(Eigen::Rotation2D<float>(bones.rotation[current]));
+        parentTransform *= Eigen::Translation<float, 2>(bones.length[current], 0);
         accumulation = parentTransform * accumulation;
     }
 
     return accumulation;
 }
 
+static Eigen::Translation2f offset(640, 640);
+
 template <int N>
-sf::Transform worldTransform(const Bones<N>& bones, int i) {
-    // --- hacky way to center the joint chain, remove ----------------------
-    static const sf::Transform offset = sf::Transform(1, 0, 640, 0, 1, 640, 0, 0, 1);
+Eigen::Transform<float, 2, Eigen::Affine> worldTransform(const Bones<N>& bones, int i) {
     return offset * ancestryTransform(bones, i) * localTransform(bones, i);
 }
 
 template<int N>
 void drawBones(const Bones<N>& bones, const std::vector<sf::ConvexShape>& boneShapes, sf::RenderTarget& target) {
-    for (size_t i = 0; i < bones.size; i++) {        
-        target.draw(boneShapes[i], worldTransform(bones, (int)i));
+    for (size_t i = 0; i < bones.size; i++) {
+        Eigen::Transform<float, 2, Eigen::Affine> transform = worldTransform(bones, (int)i);
+        sf::Transform t(
+            transform(0,0), transform(0,1), transform(0,2),
+            transform(1,0), transform(1,1), transform(1,2),
+            transform(2,0), transform(2,1), transform(2,2)
+        );
+        target.draw(boneShapes[i], t);
     }
 }
 
 template <int N>
-sf::Vector2f jointPosition(Bones<N>& bones, int i) {
-    sf::Transform world = worldTransform(bones, i);
-    return world.transformPoint(bones.length[i], 0);
+Eigen::Vector2f jointPosition(Bones<N>& bones, int i) {
+    Eigen::Transform<float, 2, Eigen::Affine> world = worldTransform(bones, i);
+    Eigen::Vector3f point(bones.length[i], 0, 1);
+    Eigen::Vector3f transformed = world * point;
+    return Eigen::Vector2f(transformed.x(), transformed.y());
 }
 
 template <int N>
-sf::Vector2f endPosition(Bones<N>& bones) {
+Eigen::Vector2f endPosition(Bones<N>& bones) {
     return jointPosition(bones, N - 1);
 }
 
 template <int N>
 void jacobianIK(Bones<N>& bones, sf::Vector2f target) {
-    sf::Vector2f sfEndPos = endPosition(bones);
-    Eigen::Vector2f endPos(sfEndPos.x, sfEndPos.y);
-
     const Eigen::Vector2f mousePos(target.x, target.y);
+    Eigen::Vector2f endPos = endPosition(bones);
 
     int giveUp = 500;
     while ((mousePos - endPos).squaredNorm() > 1.f) {
         Eigen::Matrix<float, 2, N> jacobian;
         for (int i = 0; i < N; i++)
         {
-            const sf::Vector2f sfJointPos = jointPosition(bones, i);
-            const Eigen::Vector2f jointPos(sfJointPos.x, sfJointPos.y);
+            const Eigen::Vector2f jointPos = jointPosition(bones, i);
             const Eigen::Vector2f jointToEnd = endPos - jointPos;
             jacobian.col(i) = Eigen::Vector2f(-jointToEnd.y(), jointToEnd.x());
         }
@@ -81,8 +85,7 @@ void jacobianIK(Bones<N>& bones, sf::Vector2f target) {
             bones.rotation[i] += d0[i] * .0001f;
         }
 
-        sf::Vector2f newPosition = endPosition(bones);
-        endPos = Eigen::Vector2f(newPosition.x, newPosition.y);
+        endPos = endPosition(bones);
 
         if (giveUp-- == 0) break;
     }
@@ -99,7 +102,7 @@ int main() {
     sf::Vector2f target;
 
     bool wiggleMode = true;
-
+    
     // init bones
     Bones<4> bones;
     for (size_t i = 0; i < bones.size; i++) {
