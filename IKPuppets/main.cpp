@@ -2,20 +2,22 @@
 #include <SFML/Graphics.hpp>
 #include <Eigen/Dense>
 
+static constexpr int BONE_COUNT = 32;
+static Eigen::Translation2f offset(640, 640);
+
 template<int N>
 struct Bones {
     int parent[N];
     
     float length[N];
-    float rotation[N];
-    float initialRotation[N];
+    Eigen::Matrix<float, N, 1> rotation;
 
     size_t size = N;
 };
 
 template <int N>
 Eigen::Rotation2D<float> localTransform(const Bones<N>& bones, int i) {
-    return Eigen::Rotation2D<float>(bones.rotation[i]);
+    return Eigen::Rotation2D<float>(bones.rotation(i));
 }
 
 template <int N>
@@ -24,25 +26,18 @@ Eigen::Transform<float, 2, Eigen::Affine> ancestryTransform(const Bones<N>& bone
     
     int current = i;
     while ((current = bones.parent[current]) != -1) {
-        Eigen::Transform<float, 2, Eigen::Affine> parentTransform(Eigen::Rotation2D<float>(bones.rotation[current]));
+        Eigen::Transform<float, 2, Eigen::Affine> parentTransform(Eigen::Rotation2D<float>(bones.rotation(current)));
         parentTransform *= Eigen::Translation<float, 2>(bones.length[current], 0);
         accumulation = parentTransform * accumulation;
     }
 
-    return accumulation;
-}
-
-static Eigen::Translation2f offset(640, 640);
-
-template <int N>
-Eigen::Transform<float, 2, Eigen::Affine> worldTransform(const Bones<N>& bones, int i) {
-    return offset * ancestryTransform(bones, i) * localTransform(bones, i);
+    return offset * accumulation;
 }
 
 template<int N>
 void drawBones(const Bones<N>& bones, const std::vector<sf::ConvexShape>& boneShapes, sf::RenderTarget& target) {
     for (size_t i = 0; i < bones.size; i++) {
-        Eigen::Transform<float, 2, Eigen::Affine> transform = worldTransform(bones, (int)i);
+        Eigen::Transform<float, 2, Eigen::Affine> transform = ancestryTransform(bones, i) * localTransform(bones, i);
         sf::Transform t(
             transform(0,0), transform(0,1), transform(0,2),
             transform(1,0), transform(1,1), transform(1,2),
@@ -54,24 +49,20 @@ void drawBones(const Bones<N>& bones, const std::vector<sf::ConvexShape>& boneSh
 
 template <int N>
 Eigen::Vector2f jointPosition(Bones<N>& bones, int i) {
-    Eigen::Transform<float, 2, Eigen::Affine> world = worldTransform(bones, i);
-    Eigen::Vector3f point(bones.length[i], 0, 1);
-    Eigen::Vector3f transformed = world * point;
+    const Eigen::Transform<float, 2, Eigen::Affine> world = ancestryTransform(bones, i) * localTransform(bones, i);
+    const Eigen::Vector3f point(bones.length[i], 0, 1);
+    const Eigen::Vector3f transformed = world * point;
     return Eigen::Vector2f(transformed.x(), transformed.y());
-}
-
-template <int N>
-Eigen::Vector2f endPosition(Bones<N>& bones) {
-    return jointPosition(bones, N - 1);
 }
 
 template <int N>
 void jacobianIK(Bones<N>& bones, sf::Vector2f target) {
     const Eigen::Vector2f mousePos(target.x, target.y);
-    Eigen::Vector2f endPos = endPosition(bones);
+    Eigen::Vector2f endPos;
 
     int giveUp = 500;
-    while ((mousePos - endPos).squaredNorm() > 1.f) {
+    for (;;) {
+        endPos = jointPosition(bones, N - 1);
         Eigen::Matrix<float, 2, N> jacobian;
         for (int i = 0; i < N; i++)
         {
@@ -81,13 +72,14 @@ void jacobianIK(Bones<N>& bones, sf::Vector2f target) {
         }
         
         const Eigen::Matrix<float, N, 1> d0 = jacobian.transpose() * (mousePos - endPos);
-        for (int i = 0; i < N; i++) {
-            bones.rotation[i] += d0[i] * .0001f;
-        }
+        bones.rotation += d0 * .000001f;
 
-        endPos = endPosition(bones);
-
-        if (giveUp-- == 0) break;
+        const Eigen::Vector2f endToMouseVector = mousePos - endPos;
+        const float magnitude = endToMouseVector.norm();
+        if (magnitude < 10)
+            break;
+        if (giveUp-- == 0)
+            break;
     }
 }
 
@@ -104,11 +96,10 @@ int main() {
     bool wiggleMode = true;
     
     // init bones
-    Bones<4> bones;
+    Bones<BONE_COUNT> bones;
     for (size_t i = 0; i < bones.size; i++) {
         bones.parent[i] = (int)i - 1;
         bones.length[i] = 100.f - 10 * i;
-        bones.initialRotation[i] = 0.0f;
     }
 
     // init boneshapes
@@ -162,9 +153,9 @@ int main() {
 
             if (wiggleMode) {
                 for (size_t i = 0; i < bones.size; i++) {
-                    bones.rotation[i] = 10.f * i * cos(dt * (1.0f + i));
+                    bones.rotation(i) = 10.f * i * cos(dt * (1.0f + i));
                 }
-                bones.rotation[0] = dt * 4.f;
+                bones.rotation(0) = dt * 4.f;
             }
             else {
                 dot.setPosition(target - sf::Vector2f{ rad, rad });
