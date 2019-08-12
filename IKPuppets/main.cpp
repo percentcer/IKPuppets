@@ -2,16 +2,15 @@
 #include <SFML/Graphics.hpp>
 #include <Eigen/Dense>
 
-static constexpr int BONE_COUNT = 32;
+static constexpr int BONE_COUNT = 8;
 static Eigen::Translation2f offset(640, 640);
 
 template<int N>
 struct Bones {
     int parent[N];
-    
     float length[N];
     Eigen::Matrix<float, N, 1> rotation;
-
+    Eigen::Transform<float, 2, Eigen::Affine> worldTransform[N];
     size_t size = N;
 };
 
@@ -21,23 +20,20 @@ Eigen::Rotation2D<float> localTransform(const Bones<N>& bones, int i) {
 }
 
 template <int N>
-Eigen::Transform<float, 2, Eigen::Affine> ancestryTransform(const Bones<N>& bones, int i) {
-    Eigen::Transform<float, 2, Eigen::Affine> accumulation = Eigen::Transform<float, 2, Eigen::Affine>::Identity();
-    
-    int current = i;
-    while ((current = bones.parent[current]) != -1) {
-        Eigen::Transform<float, 2, Eigen::Affine> parentTransform(Eigen::Rotation2D<float>(bones.rotation(current)));
-        parentTransform *= Eigen::Translation<float, 2>(bones.length[current], 0);
-        accumulation = parentTransform * accumulation;
+void updateTransforms(Bones<N>& bones) {
+    Eigen::Transform<float, 2, Eigen::Affine> parentTransform = Eigen::Transform<float, 2, Eigen::Affine>(offset);
+    float parentBoneLength = 0.0f;
+    for (int i = 0; i < N; i++) {
+        bones.worldTransform[i] = parentTransform * Eigen::Translation<float, 2>(parentBoneLength, 0) * Eigen::Rotation2D<float>(bones.rotation(i));
+        parentTransform = bones.worldTransform[i];
+        parentBoneLength = bones.length[i];
     }
-
-    return offset * accumulation;
 }
 
 template<int N>
 void drawBones(const Bones<N>& bones, const std::vector<sf::ConvexShape>& boneShapes, sf::RenderTarget& target) {
     for (size_t i = 0; i < bones.size; i++) {
-        Eigen::Transform<float, 2, Eigen::Affine> transform = ancestryTransform(bones, i) * localTransform(bones, i);
+        const Eigen::Transform<float, 2, Eigen::Affine>& transform = bones.worldTransform[i];
         sf::Transform t(
             transform(0,0), transform(0,1), transform(0,2),
             transform(1,0), transform(1,1), transform(1,2),
@@ -49,7 +45,8 @@ void drawBones(const Bones<N>& bones, const std::vector<sf::ConvexShape>& boneSh
 
 template <int N>
 Eigen::Vector2f jointPosition(Bones<N>& bones, int i) {
-    const Eigen::Transform<float, 2, Eigen::Affine> world = ancestryTransform(bones, i) * localTransform(bones, i);
+    // todo: if we give bones.length the same treatment we did bones.rotation then we can just make this a single mul
+    const Eigen::Transform<float, 2, Eigen::Affine>& world = bones.worldTransform[i];
     const Eigen::Vector3f point(bones.length[i], 0, 1);
     const Eigen::Vector3f transformed = world * point;
     return Eigen::Vector2f(transformed.x(), transformed.y());
@@ -73,6 +70,7 @@ void jacobianIK(Bones<N>& bones, sf::Vector2f target) {
         
         const Eigen::Matrix<float, N, 1> d0 = jacobian.transpose() * (mousePos - endPos);
         bones.rotation += d0 * .000001f;
+        updateTransforms(bones);
 
         const Eigen::Vector2f endToMouseVector = mousePos - endPos;
         const float magnitude = endToMouseVector.norm();
@@ -156,6 +154,7 @@ int main() {
                     bones.rotation(i) = 10.f * i * cos(dt * (1.0f + i));
                 }
                 bones.rotation(0) = dt * 4.f;
+                updateTransforms(bones);
             }
             else {
                 dot.setPosition(target - sf::Vector2f{ rad, rad });
