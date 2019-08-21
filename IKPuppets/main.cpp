@@ -65,31 +65,26 @@ void jacobianIK(Bones<N>& bones, sf::Vector2f target) {
 
     const Eigen::Vector2f mousePos(target.x, target.y);
 
-    int giveUp = 500;
-    while ((mousePos - endPos).squaredNorm() > 1.f) {
-        Eigen::Matrix<float, 2, N> jacobian;
-        for (int i = 0; i < N; i++)
-        {
-            const sf::Vector2f sfJointPos = jointPosition(bones, i);
-            const Eigen::Vector2f jointPos(sfJointPos.x, sfJointPos.y);
-            const Eigen::Vector2f jointToEnd = endPos - jointPos;
-            const Eigen::Vector3f jointToEnd3f = Eigen::Vector3f(jointToEnd.x(), jointToEnd.y(), 0.0f);
-            static const Eigen::Vector3f axisZ(0.0f, 0.0f, 1.0f);
-            const Eigen::Vector3f dTheta = axisZ.cross(jointToEnd3f);
-            const Eigen::Vector2f dTheta2f = Eigen::Vector2f(dTheta.x(), dTheta.y());
-            jacobian.col(i) = dTheta2f;
-        }
-        
-        const Eigen::Matrix<float, N, 1> d0 = jacobian.transpose() * (mousePos - endPos);
-        for (int i = 0; i < N; i++) {
-            bones.rotation[i] += d0[i] * .0001f;
-        }
-
-        sf::Vector2f newPosition = endPosition(bones);
-        endPos = Eigen::Vector2f(newPosition.x, newPosition.y);
-
-        if (giveUp-- == 0) break;
+    Eigen::Matrix<float, 2, N> jacobian;
+    for (int i = 0; i < N; i++)
+    {
+        const sf::Vector2f sfJointPos = jointPosition(bones, i);
+        const Eigen::Vector2f jointPos(sfJointPos.x, sfJointPos.y);
+        const Eigen::Vector2f jointToEnd = endPos - jointPos;
+        const Eigen::Vector3f jointToEnd3f = Eigen::Vector3f(jointToEnd.x(), jointToEnd.y(), 0.0f);
+        static const Eigen::Vector3f axisZ(0.0f, 0.0f, 1.0f);
+        const Eigen::Vector3f dTheta = axisZ.cross(jointToEnd3f);
+        const Eigen::Vector2f dTheta2f = Eigen::Vector2f(dTheta.x(), dTheta.y());
+        jacobian.col(i) = dTheta2f;
     }
+        
+    const Eigen::Matrix<float, N, 1> d0 = jacobian.transpose() * (mousePos - endPos);
+    for (int i = 0; i < N; i++) {
+        bones.rotation[i] += d0[i] * .0001f;
+    }
+
+    sf::Vector2f newPosition = endPosition(bones);
+    endPos = Eigen::Vector2f(newPosition.x, newPosition.y);
 }
 
 int main() {
@@ -105,7 +100,7 @@ int main() {
     bool wiggleMode = true;
 
     // init bones
-    Bones<4> bones;
+    Bones<8> bones;
     for (size_t i = 0; i < bones.size; i++) {
         bones.parent[i] = (int)i - 1;
         bones.length[i] = 100.f - 10 * i;
@@ -171,9 +166,9 @@ int main() {
                 dot.setPosition(target - sf::Vector2f{ rad, rad });
                 window.draw(dot);
                 jacobianIK(bones, target);
-            }            
+            }
 
-            drawBones(bones, boneShapes, window);
+			drawBones(bones, boneShapes, window);
 
             window.display();
         }
