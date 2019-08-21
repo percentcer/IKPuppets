@@ -2,89 +2,83 @@
 #include <SFML/Graphics.hpp>
 #include <Eigen/Dense>
 
+static constexpr int BONE_COUNT = 8;
+static Eigen::Translation2f offset(640, 640);
+
 template<int N>
 struct Bones {
     int parent[N];
-    
     float length[N];
-    float rotation[N];
-    float initialRotation[N];
-
+    Eigen::Matrix<float, N, 1> rotation;
+    Eigen::Transform<float, 2, Eigen::Affine> worldTransform[N];
     size_t size = N;
 };
 
 template <int N>
-sf::Transform localTransform(const Bones<N>& bones, int i) {
-    return sf::Transform().rotate(bones.rotation[i]);
+Eigen::Rotation2D<float> localTransform(const Bones<N>& bones, int i) {
+    return Eigen::Rotation2D<float>(bones.rotation(i));
 }
 
 template <int N>
-sf::Transform ancestryTransform(const Bones<N>& bones, int i) {
-    sf::Transform accumulation;
-    
-    int current = i;
-    while ((current = bones.parent[current]) != -1) {
-        sf::Transform parentTransform;
-        parentTransform.rotate(bones.rotation[current]);
-        parentTransform.translate(bones.length[current], 0);
-        accumulation = parentTransform * accumulation;
+void updateTransforms(Bones<N>& bones) {
+    Eigen::Transform<float, 2, Eigen::Affine> parentTransform = Eigen::Transform<float, 2, Eigen::Affine>(offset);
+    float parentBoneLength = 0.0f;
+    for (int i = 0; i < N; i++) {
+        bones.worldTransform[i] = parentTransform * Eigen::Translation<float, 2>(parentBoneLength, 0) * Eigen::Rotation2D<float>(bones.rotation(i));
+        parentTransform = bones.worldTransform[i];
+        parentBoneLength = bones.length[i];
     }
-
-    return accumulation;
-}
-
-template <int N>
-sf::Transform worldTransform(const Bones<N>& bones, int i) {
-    // --- hacky way to center the joint chain, remove ----------------------
-    static const sf::Transform offset = sf::Transform(1, 0, 640, 0, 1, 640, 0, 0, 1);
-    return offset * ancestryTransform(bones, i) * localTransform(bones, i);
 }
 
 template<int N>
 void drawBones(const Bones<N>& bones, const std::vector<sf::ConvexShape>& boneShapes, sf::RenderTarget& target) {
-    for (size_t i = 0; i < bones.size; i++) {        
-        target.draw(boneShapes[i], worldTransform(bones, (int)i));
+    for (size_t i = 0; i < bones.size; i++) {
+        const Eigen::Transform<float, 2, Eigen::Affine>& transform = bones.worldTransform[i];
+        sf::Transform t(
+            transform(0,0), transform(0,1), transform(0,2),
+            transform(1,0), transform(1,1), transform(1,2),
+            transform(2,0), transform(2,1), transform(2,2)
+        );
+        target.draw(boneShapes[i], t);
     }
 }
 
 template <int N>
-sf::Vector2f jointPosition(Bones<N>& bones, int i) {
-    sf::Transform world = worldTransform(bones, i);
-    return world.transformPoint(bones.length[i], 0);
-}
-
-template <int N>
-sf::Vector2f endPosition(Bones<N>& bones) {
-    return jointPosition(bones, N - 1);
+Eigen::Vector2f jointPosition(Bones<N>& bones, int i) {
+    // todo: if we give bones.length the same treatment we did bones.rotation then we can just make this a single mul
+    const Eigen::Transform<float, 2, Eigen::Affine>& world = bones.worldTransform[i];
+    const Eigen::Vector3f point(bones.length[i], 0, 1);
+    const Eigen::Vector3f transformed = world * point;
+    return Eigen::Vector2f(transformed.x(), transformed.y());
 }
 
 template <int N>
 void jacobianIK(Bones<N>& bones, sf::Vector2f target) {
-    sf::Vector2f sfEndPos = endPosition(bones);
-    Eigen::Vector2f endPos(sfEndPos.x, sfEndPos.y);
-
     const Eigen::Vector2f mousePos(target.x, target.y);
+    Eigen::Vector2f endPos;
 
-    Eigen::Matrix<float, 2, N> jacobian;
-    for (int i = 0; i < N; i++)
-    {
-        const sf::Vector2f sfJointPos = jointPosition(bones, i);
-        const Eigen::Vector2f jointPos(sfJointPos.x, sfJointPos.y);
-        const Eigen::Vector2f jointToEnd = endPos - jointPos;
-        const Eigen::Vector3f jointToEnd3f = Eigen::Vector3f(jointToEnd.x(), jointToEnd.y(), 0.0f);
-        static const Eigen::Vector3f axisZ(0.0f, 0.0f, 1.0f);
-        const Eigen::Vector3f dTheta = axisZ.cross(jointToEnd3f);
-        const Eigen::Vector2f dTheta2f = Eigen::Vector2f(dTheta.x(), dTheta.y());
-        jacobian.col(i) = dTheta2f;
-    }
+    int giveUp = 500;
+    for (;;) {
+        endPos = jointPosition(bones, N - 1);
+        Eigen::Matrix<float, 2, N> jacobian;
+        for (int i = 0; i < N; i++)
+        {
+            const Eigen::Vector2f jointPos = jointPosition(bones, i);
+            const Eigen::Vector2f jointToEnd = endPos - jointPos;
+            jacobian.col(i) = Eigen::Vector2f(-jointToEnd.y(), jointToEnd.x());
+        }
         
-    const Eigen::Matrix<float, N, 1> d0 = jacobian.transpose() * (mousePos - endPos);
-    for (int i = 0; i < N; i++) {
-        bones.rotation[i] += d0[i] * .0001f;
-    }
+        const Eigen::Matrix<float, N, 1> d0 = jacobian.transpose() * (mousePos - endPos);
+        bones.rotation += d0 * .000001f;
+        updateTransforms(bones);
 
-    sf::Vector2f newPosition = endPosition(bones);
-    endPos = Eigen::Vector2f(newPosition.x, newPosition.y);
+        const Eigen::Vector2f endToMouseVector = mousePos - endPos;
+        const float magnitude = endToMouseVector.norm();
+        if (magnitude < 10)
+            break;
+        if (giveUp-- == 0)
+            break;
+    }
 }
 
 int main() {
@@ -98,13 +92,12 @@ int main() {
     sf::Vector2f target;
 
     bool wiggleMode = true;
-
+    
     // init bones
-    Bones<8> bones;
+    Bones<BONE_COUNT> bones;
     for (size_t i = 0; i < bones.size; i++) {
         bones.parent[i] = (int)i - 1;
         bones.length[i] = 100.f - 10 * i;
-        bones.initialRotation[i] = 0.0f;
     }
 
     // init boneshapes
@@ -158,17 +151,18 @@ int main() {
 
             if (wiggleMode) {
                 for (size_t i = 0; i < bones.size; i++) {
-                    bones.rotation[i] = 10.f * i * cos(dt * (1.0f + i));
+                    bones.rotation(i) = 10.f * i * cos(dt * (1.0f + i));
                 }
-                bones.rotation[0] = dt * 4.f;
+                bones.rotation(0) = dt * 4.f;
+                updateTransforms(bones);
             }
             else {
                 dot.setPosition(target - sf::Vector2f{ rad, rad });
                 window.draw(dot);
                 jacobianIK(bones, target);
-            }
+            }            
 
-			drawBones(bones, boneShapes, window);
+            drawBones(bones, boneShapes, window);
 
             window.display();
         }
